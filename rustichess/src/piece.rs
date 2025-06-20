@@ -1,126 +1,127 @@
-use std::fmt;
+use std::cmp::PartialEq;
+use crate::piece::Piece::*;
+use std::fmt::{self, Display, Formatter};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Color {
-    White,
-    Black,
-}
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Square {
-    pub x: u8, // 0‥7  (a‥h)
-    pub y: u8, // 0‥7  (1‥8 → 0‥7)
-}
-
-impl Square {
-    pub fn from_algebraic(file: &str, rank: u8) -> Option<Self> {
-        let b = *file.as_bytes().get(0)?;
-        let fx = b.checked_sub(b'a')?;
-        (fx < 8 && (1..=8).contains(&rank)).then(|| Self { x: fx, y: rank - 1 })
-    }
-
-    pub fn to_algebraic(self) -> (String, u8) {
-        (String::from_utf8_lossy(&[b'a' + self.x]).into(), self.y + 1)
-    }
-}
-
-impl fmt::Display for Square {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (file, rank) = self.to_algebraic();
-        write!(f, "{file}{rank}")
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum PieceType {
-    Pawn,
-    Rook,
-    Knight,
-    Bishop,
-    Queen,
-    King,
-}
-
-#[derive(Clone, Debug)]
-pub struct Piece {
-    piece_type: PieceType,
-    square:     Square,
-    color:      Color,
+#[derive(Copy, Clone,PartialEq, Eq, Debug)]
+pub enum Piece {
+    WhitePawn,
+    WhiteRook,
+    WhiteKnight,
+    WhiteBishop,
+    WhiteQueen,
+    WhiteKing,
+    BlackPawn,
+    BlackRook,
+    BlackKnight,
+    BlackBishop,
+    BlackQueen,
+    BlackKing,
 }
 
 impl Piece {
-    pub fn new(piece_type: PieceType, color: Color, file: &str, rank: u8) -> Self {
-        let square =
-            Square::from_algebraic(file, rank).expect("invalid chess coordinate");
-        Self { piece_type, square, color }
-    }
-
-    pub fn coord(&self) -> (String, u8) {
-        self.square.to_algebraic()
+    /// Map every piece to a single UTF-8 character.
+    #[inline]
+    fn to_char(self) -> char {
+        use Piece::*;
+        match self {
+            WhitePawn   => 'P',
+            WhiteKnight => 'N',
+            WhiteBishop => 'B',
+            WhiteRook   => 'R',
+            WhiteQueen  => 'Q',
+            WhiteKing   => 'K',
+            BlackPawn   => 'p',
+            BlackKnight => 'n',
+            BlackBishop => 'b',
+            BlackRook   => 'r',
+            BlackQueen  => 'q',
+            BlackKing   => 'k',
+        }
     }
 }
 
+
+
+#[derive(Copy, Clone)]
 pub struct Board {
-    pub pieces: [Piece; 32]
+    squares: [Option<Piece>; 64],
+}
+
+impl Display for Board {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // Ranks are printed 8 → 1 so that rank 8 is on top
+        for rank in (0..8).rev() {
+            write!(f, "{} ", rank + 1)?; // left rank label
+            for file in 0..8 {
+                let idx = rank * 8 + file;
+                let symbol = self.squares[idx]
+                    .map(|p| p.to_char())
+                    .unwrap_or('.');
+                write!(f, "{} ", symbol)?;
+            }
+            writeln!(f)?; // newline after each rank
+        }
+        // bottom file labels
+        writeln!(f, "  a b c d e f g h")?;
+        Ok(())
+    }
 }
 
 impl Board {
-    /// Creates a fresh board with all 32 pieces in their initial positions.
-    pub fn new() -> Self {
-        use Color::*;
-        use PieceType::*;
-
-        let mk = |pt: PieceType, col: Color, file: char, rank: u8| {
-            Piece::new(pt, col, &file.to_string(), rank)
-        };
-
-        // Order: white back-rank, white pawns, black back-rank, black pawns
-        let pieces = [
-            // ── White major pieces ──
-            mk(Rook,   White, 'a', 1),
-            mk(Knight, White, 'b', 1),
-            mk(Bishop, White, 'c', 1),
-            mk(Queen,  White, 'd', 1),
-            mk(King,   White, 'e', 1),
-            mk(Bishop, White, 'f', 1),
-            mk(Knight, White, 'g', 1),
-            mk(Rook,   White, 'h', 1),
-
-            // ── White pawns ──
-            mk(Pawn, White, 'a', 2),
-            mk(Pawn, White, 'b', 2),
-            mk(Pawn, White, 'c', 2),
-            mk(Pawn, White, 'd', 2),
-            mk(Pawn, White, 'e', 2),
-            mk(Pawn, White, 'f', 2),
-            mk(Pawn, White, 'g', 2),
-            mk(Pawn, White, 'h', 2),
-
-            // ── Black major pieces ──
-            mk(Rook,   Black, 'a', 8),
-            mk(Knight, Black, 'b', 8),
-            mk(Bishop, Black, 'c', 8),
-            mk(Queen,  Black, 'd', 8),
-            mk(King,   Black, 'e', 8),
-            mk(Bishop, Black, 'f', 8),
-            mk(Knight, Black, 'g', 8),
-            mk(Rook,   Black, 'h', 8),
-
-            // ── Black pawns ──
-            mk(Pawn, Black, 'a', 7),
-            mk(Pawn, Black, 'b', 7),
-            mk(Pawn, Black, 'c', 7),
-            mk(Pawn, Black, 'd', 7),
-            mk(Pawn, Black, 'e', 7),
-            mk(Pawn, Black, 'f', 7),
-            mk(Pawn, Black, 'g', 7),
-            mk(Pawn, Black, 'h', 7),
-        ];
-
-        Board { pieces }
+    pub fn set_up() -> Board {
+        let squares: [Option<Piece>; 64] =
+            [Some(WhiteRook), Some(WhiteKnight), Some(WhiteBishop), Some(WhiteQueen), Some(WhiteKing), Some(WhiteBishop), Some(WhiteKnight), Some(WhiteRook),
+                Some(WhitePawn), Some(WhitePawn), Some(WhitePawn), Some(WhitePawn), Some(WhitePawn), Some(WhitePawn), Some(WhitePawn), Some(WhitePawn),
+                None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None,
+                Some(BlackPawn), Some(BlackPawn), Some(BlackPawn), Some(BlackPawn), Some(BlackPawn), Some(BlackPawn), Some(BlackPawn), Some(BlackPawn),
+                Some(BlackRook), Some(BlackKnight), Some(BlackBishop), Some(BlackQueen), Some(BlackKing), Some(BlackBishop), Some(BlackKnight), Some(BlackRook)];
+        Board { squares }
     }
+    
+    
+    pub fn move_piece(&mut self, from: usize, to: usize) -> Result<Option<Piece>, String> {
+        let piece_to_move = match self.squares[from] {
+            Some(piece) => piece,
+            None => return Err(String::from("No piece to move"))
+        };
+        if piece_to_move == WhitePawn {
+            
+        } 
+        
+        
+        let mut board_after_the_move = self.clone();
+        
+        
+        Ok(board_after_the_move.squares[from])
+    }
+    
+    fn is_king_safe(&self, king_index: usize) -> bool {
+        let king_square = self.squares[king_index];
+        let king_is_safe = king_square.is_some();
+        king_is_safe
+    }
+    
+    
+}
 
-    pub fn try_a_move(&self, pt: PieceType, col: Color, file: char, rank: u8) -> bool {
-        true
+#[cfg(test)]
+mod tests {
+    use crate::piece::Board;
+
+    #[test]
+    fn test_board() {
+        let board = Board::set_up();
+        assert_eq!(board.squares.iter().filter(|x| x.is_some()).count(), 32);
+    }
+    #[test]
+    fn test_display() {
+        let mut board = Board::set_up();
+        println!("{board}");
+        board.move_piece(8,16);
+        println!("{board}");
     }
 }
