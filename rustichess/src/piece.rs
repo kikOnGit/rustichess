@@ -1,7 +1,6 @@
 use crate::piece::Piece::*;
 use std::cmp::PartialEq;
 use std::fmt::{self, Display, Formatter};
-
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Piece {
     WhitePawn,
@@ -16,6 +15,144 @@ pub enum Piece {
     BlackBishop,
     BlackQueen,
     BlackKing,
+}
+
+const ROOK_TABLE: [[usize; 14]; 64] = init_rook_table();
+const BISHOP_TABLE: [[usize; 13]; 64] = init_bishop_table();
+const QUEEN_TABLE: [[usize; 27]; 64] = init_queen_table();
+const KING_TABLE: [[usize; 8]; 64] = init_king_table();
+const KNIGHT_TABLE: [[usize; 8]; 64] = init_knight_table();
+
+const QUEEN_AND_KING_DIRS: [(isize, isize); 8] = [
+    (0, -1), (0, 1),
+    (-1, 0), (1, 0),
+    (-1, -1), (-1, 1),
+    (1, 1),  (1, -1),
+];
+
+const KNIGHT_MOVES: [(isize, isize); 8] = [
+    (-2, -1), (-2, 1),
+    (-1, -2), (-1, 2),
+    (1, -2), (1, 2),
+    (2, -1), (2, 1),
+];
+const fn push_to_direction_limited<const LEN: usize>(
+    row: &mut [usize; LEN],
+    index: &mut usize,
+    square: usize,
+    vertical_dir: isize,
+    horizontal_dir: isize,
+    move_limit: isize,
+) {
+    let mut file = (square % 8) as isize;
+    let mut rank = (square / 8) as isize;
+    let mut number_of_moves = 0;
+    loop {
+        file += vertical_dir;
+        rank += horizontal_dir;
+        if rank < 0 || rank >= 8 || file < 0 || file >= 8 || number_of_moves >= move_limit {
+            break;
+        }
+        row[*index] = rank as usize * 8 + file as usize;
+        *index += 1;
+        number_of_moves += 1;
+    }
+}
+
+const fn push_to_direction<const LEN: usize>(
+    row: &mut [usize; LEN],
+    index: &mut usize,
+    square: usize,
+    vertical_dir: isize,
+    horizontal_dir: isize,
+) {
+    push_to_direction_limited(row, index, square, vertical_dir, horizontal_dir, 8)
+}
+const fn init_rook_table() -> [[usize; 14]; 64] {
+    let mut table = [[0usize; 14]; 64];
+    let mut square = 0usize;
+    while square < 64 {
+        let mut index = 0usize;
+        let row = &mut table[square];
+        push_to_direction(row, &mut index, square, 0, -1); // left
+        push_to_direction(row, &mut index, square, 0, 1); // right
+        push_to_direction(row, &mut index, square, -1, 0); // down
+        push_to_direction(row, &mut index, square, 1, 0); // up
+        square += 1;
+    }
+    table
+}
+
+const fn init_bishop_table() -> [[usize; 13]; 64] {
+    let mut table = [[0usize; 13]; 64];
+    let mut square = 0usize;
+    while square < 64 {
+        let mut index = 0usize;
+        let row = &mut table[square];
+        push_to_direction(row, &mut index, square, -1, -1);
+        push_to_direction(row, &mut index, square, -1, 1);
+        push_to_direction(row, &mut index, square, 1, 1);
+        push_to_direction(row, &mut index, square, 1, -1);
+        square += 1;
+    }
+    table
+}
+
+const fn init_queen_table() -> [[usize; 27]; 64] {
+    let mut table = [[0usize; 27]; 64];
+    let mut square = 0usize;
+    while square < 64 {
+        let mut idx = 0usize;
+        let row = &mut table[square];
+        let mut d = 0usize;
+        while d < QUEEN_AND_KING_DIRS.len() {
+            let (v_dir, h_dir) = QUEEN_AND_KING_DIRS[d];
+            push_to_direction(row, &mut idx, square, v_dir, h_dir);
+            d += 1;
+        }
+        square += 1;
+    }
+
+    table
+}
+
+const fn init_king_table() -> [[usize; 8]; 64] {
+    let mut table = [[0usize; 8]; 64];
+    let mut square = 0usize;
+    while square < 64 {
+        let mut idx = 0usize;
+        let row = &mut table[square];
+        let mut d = 0usize;
+        while d < QUEEN_AND_KING_DIRS.len() {
+            let (v_dir, h_dir) = QUEEN_AND_KING_DIRS[d];
+            push_to_direction_limited(row, &mut idx, square, v_dir, h_dir, 1);
+            d += 1;
+        }
+        square += 1;
+    }
+    table
+}
+
+const fn init_knight_table() -> [[usize; 8]; 64] {
+    let mut table = [[0usize; 8]; 64];
+    let mut square = 0usize;
+    while square < 64 {
+        let file = (square % 8) as isize;
+        let rank = (square / 8) as isize;
+        let row = &mut table[square];
+        let mut m = 0usize;
+        while m < KNIGHT_MOVES.len() {
+            let (v_dir, h_dir) = KNIGHT_MOVES[m];
+            let file = file + v_dir;
+            let rank = rank + h_dir;
+            if file >= 0 && file < 8 && rank >= 0 && rank < 8 {
+                row[m] = rank as usize * 8 + file as usize;
+            }
+            m += 1;
+        }
+        square += 1;   
+    }
+    table
 }
 
 impl Piece {
@@ -38,6 +175,18 @@ impl Piece {
             BlackKing => 'k',
         }
     }
+
+    fn is_white_piece(self) -> bool {
+        match self {
+            WhitePawn | WhiteKnight | WhiteBishop | WhiteRook | WhiteQueen | WhiteKing => true,
+            BlackPawn | BlackKnight | BlackBishop | BlackRook | BlackQueen | BlackKing => false,
+        }
+    }
+    
+    fn is_black_piece(self) -> bool {
+        !self.is_white_piece()
+    }
+    
 }
 
 #[derive(Copy, Clone)]
@@ -146,60 +295,69 @@ impl Board {
             None => return Err(String::from("No piece to move")),
         };
         let captured_piece = self.squares[to];
-        if (piece_to_move == WhiteRook || piece_to_move == BlackRook)
-            && !can_move_like_a_rook(from, to)
-        {
+        if (piece_to_move == WhiteRook || piece_to_move == BlackRook) && !ROOK_TABLE[from].contains(&to) {
             return Err(String::from(
                 "The rook can only move up or down vertically on any file",
             ));
         }
         if (piece_to_move == WhiteBishop || piece_to_move == BlackBishop)
-            && !can_move_like_a_bishop(from, to)
+            && !BISHOP_TABLE[from].contains(&to)
         {
             return Err(String::from("The bishop can only move diagonally"));
         }
 
         if (piece_to_move == WhiteQueen || piece_to_move == BlackQueen)
-            && !(can_move_like_a_bishop(from, to) || can_move_like_a_rook(from, to))
+            && !QUEEN_TABLE[from].contains(&to)
         {
             return Err(String::from(
                 "The queen does almost what she wants, but not quite",
             ));
         }
-
         if (piece_to_move == WhiteKnight || piece_to_move == BlackKnight)
-            && !can_move_like_a_knight(from, to)
+            && !KNIGHT_TABLE[from].contains(&to)
         {
             return Err(String::from("The knight cannot jump here"));
         }
 
-        if piece_to_move == WhiteKing || piece_to_move == BlackKing {
-            
+        if (piece_to_move == WhiteKing || piece_to_move == BlackKing)
+            && !KING_TABLE[from].contains(&to)
+        {
+            return Err(String::from("The king cannot jump here"));
         }
         
-        fn can_move_like_a_rook(from: usize, to: usize) -> bool {
-            (from / 8 == to / 8) || (from % 8 == to % 8)
-        }
-
-        fn can_move_like_a_bishop(from: usize, to: usize) -> bool {
-            let ranks_dif = (from / 8).abs_diff(to / 8);
-            let file_dif = (from % 8).abs_diff(to % 8);
-            ranks_dif == file_dif
-        }
-
-        fn can_move_like_a_knight(from: usize, to: usize) -> bool {
-            let ranks_dif = (from / 8).abs_diff(to / 8);
-            let file_dif = (from % 8).abs_diff(to % 8);
-            (ranks_dif == 2 && file_dif == 1) || (ranks_dif == 1 && file_dif == 2)
-        }
         Ok(captured_piece)
     }
 
-    fn is_king_safe(&self, king_index: usize) -> bool {
-        let king_square = self.squares[king_index];
-        let king_is_safe = king_square.is_some();
-        king_is_safe
+    fn find_piece(&self, piece: Piece) -> [usize; 8] {
+        let mut  pieces: [usize; 8] = [0; 8];
+        let  mut index = 0;
+        for  i in 0..64 {
+            if self.squares[i].is_some() && piece == self.squares[i].unwrap() {
+                pieces[index] = i;
+                index += 1;
+            }
+        }
+        pieces
     }
+    fn is_king_safe(&self, from: usize, to: usize) -> bool {
+        let mut next_board = self.clone();
+        next_board.squares[to] = self.squares[from];
+        next_board.squares[from] = None;
+        let mut attacking_squares = [0usize; 64];
+        if next_board.squares[to].unwrap().is_white_piece() {
+            let king_square = next_board.find_piece(WhiteKing)[0];
+            for i in 0..64 {
+                if next_board.squares[i].is_some() {
+                    let piece = next_board.squares[i].unwrap();
+                    if piece.is_black_piece() {
+                        
+                    }
+                }
+            }
+            
+        }
+        true
+        }
 }
 
 #[cfg(test)]
